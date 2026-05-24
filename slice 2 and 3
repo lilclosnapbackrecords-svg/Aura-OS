@@ -1,76 +1,318 @@
-<div className="flex gap-2 items-center">
-    <input
-      className="flex-1 bg-zinc-900 p-3 rounded-xl"
-      value={message}
-      onChange={(e) => setMessage(e.target.value)}
-      placeholder="Talk to Aura..."
-    />
+// ============================================
+// SLICE 2: Chat Interface & Message Management
+// ============================================
 
-    <button
-      className="bg-cyan-500 px-4 rounded-xl"
-      onClick={sendMessage}
-    >
-      Send
-    </button>
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 
-    <button
-      className="bg-zinc-800 px-3 rounded-xl text-xs"
-      onClick={saveLastAsMemory}
-      disabled={savingMemory || messages.length === 0}
-    >
-      {savingMemory ? "Saving..." : "Save as memory"}
-    </button>
-  </div>
-</div>try {
-  const res = await axios.post(
-    `${API_BASE}/chat`,
-    {
-      userId,
-      message
+const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:5000/api';
+
+export const ChatWindow = ({ userId }) => {
+  const [message, setMessage] = useState('');
+  const [messages, setMessages] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // Load previous messages on component mount
+  useEffect(() => {
+    loadMessages();
+  }, [userId]);
+
+  const loadMessages = async () => {
+    try {
+      setLoading(true);
+      const res = await axios.get(`${API_BASE}/chat/history/${userId}`);
+      setMessages(res.data.messages || []);
+    } catch (err) {
+      console.error('Error loading messages:', err);
+      setError('Failed to load chat history');
+    } finally {
+      setLoading(false);
     }
-  );
+  };
 
-  const auraReply = res.data.response;
+  const sendMessage = async () => {
+    if (!message.trim()) return;
 
-  setMessages(prev => [
-    ...prev,
-    { user: message, aura: auraReply }
-  ]);
+    try {
+      setError(null);
+      const userMessage = message;
+      setMessage('');
 
-  setMessage("");
-} catch (err) {
-  console.error("Error sending message:", err);
-}messages.lengthconst last = messages[messages.length - 1];
-const content = `User: ${last.user}\nAura: ${last.aura}`;
+      const res = await axios.post(`${API_BASE}/chat`, {
+        userId,
+        message: userMessage,
+      });
 
-setSavingMemory(true);
-await addMemory(content, "chat-highlight", 2);
-setSavingMemory(false);axios.post{loading && <div className="text-sm text-zinc-400">Loading memories...</div>}
+      const auraReply = res.data.response;
 
-  <div className="space-y-2 overflow-y-auto">
-    {memories.map((m) => (
-      <div
-        key={m.id}
-        className="border border-zinc-700 rounded-lg p-2 text-sm"
-      >
-        {m.tag && (
-          <div className="text-xs text-cyan-400 mb-1">
-            #{m.tag} • importance {m.importance ?? 1}
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now(),
+          user: userMessage,
+          aura: auraReply,
+          timestamp: new Date().toISOString(),
+        },
+      ]);
+    } catch (err) {
+      console.error('Error sending message:', err);
+      setError('Failed to send message');
+      setMessage(message); // Restore message on error
+    }
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-zinc-950 rounded-xl p-4">
+      {/* Chat History */}
+      <div className="flex-1 overflow-y-auto space-y-3 mb-4">
+        {loading && (
+          <div className="text-sm text-zinc-400 text-center py-8">
+            Loading chat history...
           </div>
         )}
-        <div>{m.content}</div>
-      </div>
-    ))}
 
-    {!loading && memories.length === 0 && (
-      <div className="text-sm text-zinc-500">
-        No memories yet. Save key ideas from your chats and projects here.
+        {messages.length === 0 && !loading && (
+          <div className="text-sm text-zinc-500 text-center py-8">
+            Start a conversation with Aura...
+          </div>
+        )}
+
+        {messages.map((msg) => (
+          <div key={msg.id} className="space-y-2">
+            {/* User Message */}
+            <div className="flex justify-end">
+              <div className="bg-cyan-600 text-white px-4 py-2 rounded-lg max-w-xs">
+                {msg.user}
+              </div>
+            </div>
+
+            {/* Aura Reply */}
+            <div className="flex justify-start">
+              <div className="bg-zinc-800 text-zinc-100 px-4 py-2 rounded-lg max-w-xs">
+                {msg.aura}
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
-    )}
-  </div>
-</div>m.idmemories.lengthif (res.data.memory) {
-    setMemories(prev => [res.data.memory, ...prev]);
-  }
-} catch (err) {
-  console.error("Error adding memory:", err);
+
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-900 text-red-100 p-2 rounded mb-3 text-sm">
+          {error}
+        </div>
+      )}
+
+      {/* Input Area */}
+      <div className="flex gap-2 items-end">
+        <textarea
+          className="flex-1 bg-zinc-900 p-3 rounded-xl text-zinc-100 placeholder-zinc-500 resize-none max-h-24"
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          onKeyPress={handleKeyPress}
+          placeholder="Talk to Aura..."
+          rows="2"
+        />
+
+        <button
+          className="bg-cyan-500 hover:bg-cyan-600 text-white px-4 py-3 rounded-xl font-medium transition"
+          onClick={sendMessage}
+          disabled={!message.trim()}
+        >
+          Send
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ============================================
+// SLICE 3: Memory System & Context Management
+// ============================================
+
+export const MemoryPanel = ({ userId }) => {
+  const [memories, setMemories] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [savingMemory, setSavingMemory] = useState(false);
+  const [selectedTag, setSelectedTag] = useState(null);
+  const [error, setError] = useState(null);
+
+  // Load memories on component mount
+  useEffect(() => {
+    loadMemories();
+  }, [userId]);
+
+  const loadMemories = async () => {
+    try {
+      setLoading(true);
+      const res = await axios.get(`${API_BASE}/memory/${userId}`);
+      setMemories(res.data.memories || []);
+    } catch (err) {
+      console.error('Error loading memories:', err);
+      setError('Failed to load memories');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const addMemory = async (content, tag = null, importance = 1) => {
+    try {
+      setSavingMemory(true);
+      setError(null);
+
+      const res = await axios.post(`${API_BASE}/memory`, {
+        userId,
+        content,
+        tag,
+        importance,
+      });
+
+      setMemories((prev) => [res.data.memory, ...prev]);
+    } catch (err) {
+      console.error('Error adding memory:', err);
+      setError('Failed to save memory');
+    } finally {
+      setSavingMemory(false);
+    }
+  };
+
+  const deleteMemory = async (memoryId) => {
+    try {
+      await axios.delete(`${API_BASE}/memory/${memoryId}`);
+      setMemories((prev) => prev.filter((m) => m.id !== memoryId));
+    } catch (err) {
+      console.error('Error deleting memory:', err);
+      setError('Failed to delete memory');
+    }
+  };
+
+  const filteredMemories = selectedTag
+    ? memories.filter((m) => m.tag === selectedTag)
+    : memories;
+
+  const uniqueTags = [...new Set(memories.map((m) => m.tag).filter(Boolean))];
+
+  return (
+    <div className="flex flex-col h-full bg-zinc-950 rounded-xl p-4">
+      <h2 className="text-xl font-bold text-cyan-400 mb-4">Aura Memory</h2>
+
+      {/* Error Message */}
+      {error && (
+        <div className="bg-red-900 text-red-100 p-2 rounded mb-3 text-sm">
+          {error}
+        </div>
+      )}
+
+      {/* Tag Filter */}
+      {uniqueTags.length > 0 && (
+        <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+          <button
+            className={`px-3 py-1 rounded-full text-sm whitespace-nowrap transition ${
+              selectedTag === null
+                ? 'bg-cyan-500 text-white'
+                : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+            }`}
+            onClick={() => setSelectedTag(null)}
+          >
+            All
+          </button>
+          {uniqueTags.map((tag) => (
+            <button
+              key={tag}
+              className={`px-3 py-1 rounded-full text-sm whitespace-nowrap transition ${
+                selectedTag === tag
+                  ? 'bg-cyan-500 text-white'
+                  : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700'
+              }`}
+              onClick={() => setSelectedTag(tag)}
+            >
+              #{tag}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Memories List */}
+      <div className="flex-1 overflow-y-auto space-y-3">
+        {loading && (
+          <div className="text-sm text-zinc-400 text-center py-8">
+            Loading memories...
+          </div>
+        )}
+
+        {filteredMemories.length === 0 && !loading && (
+          <div className="text-sm text-zinc-500 text-center py-8">
+            {selectedTag
+              ? `No memories with tag #${selectedTag}`
+              : 'No memories yet. Save key ideas from your chats and projects here.'}
+          </div>
+        )}
+
+        {filteredMemories.map((memory) => (
+          <div
+            key={memory.id}
+            className="border border-zinc-700 rounded-lg p-3 hover:border-cyan-500 transition"
+          >
+            {memory.tag && (
+              <div className="text-xs text-cyan-400 mb-2 flex justify-between items-center">
+                <span>
+                  #{memory.tag} • Importance: {memory.importance ?? 1}
+                </span>
+                <button
+                  className="text-xs text-red-400 hover:text-red-300"
+                  onClick={() => deleteMemory(memory.id)}
+                >
+                  Delete
+                </button>
+              </div>
+            )}
+            <div className="text-sm text-zinc-100">{memory.content}</div>
+            <div className="text-xs text-zinc-500 mt-2">
+              {new Date(memory.createdAt).toLocaleDateString()}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Save Memory Button */}
+      <button
+        className="mt-4 bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-xl font-medium transition disabled:opacity-50"
+        disabled={savingMemory}
+        onClick={() =>
+          addMemory('Quick note from Aura', 'quick-note', 1)
+        }
+      >
+        {savingMemory ? 'Saving...' : 'Save Note'}
+      </button>
+    </div>
+  );
+};
+
+// ============================================
+// Main App Component
+// ============================================
+
+export default function AuraApp() {
+  const [userId] = useState('user-' + Math.random().toString(36).substr(2, 9));
+
+  return (
+    <div className="h-screen bg-zinc-950 p-4">
+      <div className="h-full grid grid-cols-3 gap-4">
+        <div className="col-span-2">
+          <ChatWindow userId={userId} />
+        </div>
+        <div>
+          <MemoryPanel userId={userId} />
+        </div>
+      </div>
+    </div>
+  );
 }
