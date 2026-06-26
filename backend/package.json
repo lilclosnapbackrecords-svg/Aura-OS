@@ -1,0 +1,21 @@
+{
+  "name": "aura-os-backend",
+  "version": "1.0.0",
+  "description": "Aura OS backend - Express + Socket.IO server",
+  "main": "server.js",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "server:dev": "nodemon server.js",
+    "lint": "echo \"No lint configured for backend\""
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "socket.io": "^4.7.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
