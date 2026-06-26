@@ -1,0 +1,90 @@
+name: Production Build & Smoke Test
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  prod-smoke:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Cache root npm packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm
+            node_modules
+          key: ${{ runner.os }}-node-root-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-root-
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Cache backend npm packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.npm
+            backend/node_modules
+          key: ${{ runner.os }}-node-backend-${{ hashFiles('backend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-backend-
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Copy frontend build into backend
+        run: |
+          mkdir -p backend
+          rm -rf backend/build || true
+          cp -R build backend/build
+
+      - name: Install backend production dependencies
+        run: npm ci --prefix backend --only=production
+
+      - name: Start backend (production)
+        run: |
+          nohup node backend/server.js > backend/server.log 2>&1 &
+          echo $! > backend/server.pid
+
+      - name: Wait for backend /health
+        run: |
+          status=""
+          for i in {1..30}; do
+            status=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:5000/health || true)
+            echo "attempt $i -> $status"
+            if [ "$status" = "200" ]; then break; fi
+            sleep 1
+          done
+          if [ "$status" != "200" ]; then echo "Backend did not become healthy"; cat backend/server.log || true; exit 1; fi
+
+      - name: Smoke tests
+        run: |
+          echo "GET /health"
+          curl -sSf http://localhost:5000/health
+          echo
+          echo "POST /api/ai/lyrics (basic smoke)"
+          curl -sSf -X POST http://localhost:5000/api/ai/lyrics -H "Content-Type: application/json" -d '{"prompt":"smoke test"}' || true
+
+      - name: Stop backend
+        if: always()
+        run: |
+          if [ -f backend/server.pid ]; then kill $(cat backend/server.pid) || true; fi
+
+      - name: Upload server log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-server-log
+          path: backend/server.log
