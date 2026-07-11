@@ -1,38 +1,77 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
 import './App.css';
 
-// Connect to the Aura OS Backend
-const socket = io('http://localhost:5000');
+// NOTE: socket is initialized inside the component to allow proper lifecycle management and cleanup
 
 function App() {
   const [transportState, setTransportState] = useState('STOPPED');
   const [lyricsDraft, setLyricsDraft] = useState('');
+  const socketRef = useRef(null);
 
   useEffect(() => {
-    socket.on('sync_status', (data) => {
-      setTransportState(data.state);
-    });
+    // Initialize socket connection on mount
+    try {
+      socketRef.current = io('http://localhost:5000');
+    } catch (e) {
+      console.warn('Socket initialization failed', e);
+      return;
+    }
 
-    return () => socket.off('sync_status');
+    const socket = socketRef.current;
+
+    const onSyncStatus = (data) => {
+      if (!data) return;
+      try {
+        setTransportState(data.state || 'STOPPED');
+      } catch (e) {
+        console.warn('Error handling sync_status', e);
+      }
+    };
+
+    socket.on('sync_status', onSyncStatus);
+
+    // Cleanup on unmount
+    return () => {
+      try {
+        socket.off('sync_status', onSyncStatus);
+        if (socket && socket.connected) socket.disconnect();
+      } catch (e) {
+        console.warn('Socket cleanup error', e);
+      }
+    };
   }, []);
 
   const handlePlay = () => {
-    socket.emit('transport_play', { time: 0 });
+    try {
+      socketRef.current?.emit('transport_play', { time: 0 });
+    } catch (e) {
+      console.warn('Failed to emit transport_play', e);
+    }
   };
 
   const handleStop = () => {
-    socket.emit('transport_stop');
+    try {
+      socketRef.current?.emit('transport_stop');
+    } catch (e) {
+      console.warn('Failed to emit transport_stop', e);
+    }
   };
 
   const generateLyrics = async () => {
-    const response = await fetch('http://localhost:5000/api/ai/lyrics', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: 'New R&B trap beat concept' })
-    });
-    const data = await response.json();
-    setLyricsDraft(data.lyrics);
+    try {
+      const resp = await fetch('http://localhost:5000/api/ai/lyrics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt: 'New R&B trap beat concept' })
+      });
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      setLyricsDraft(data.lyrics || '');
+    } catch (err) {
+      console.error('generateLyrics error', err);
+      setLyricsDraft('// Error generating lyrics — check server logs or network.');
+    }
   };
 
   return (
@@ -53,9 +92,9 @@ function App() {
         <section className="ai-assistant">
           <h2>AI Songwriting Assistant</h2>
           <button onClick={generateLyrics}>Draft Lyrics</button>
-          <textarea 
-            value={lyricsDraft} 
-            readOnly 
+          <textarea
+            value={lyricsDraft}
+            readOnly
             placeholder="AI generated lyrics will appear here..."
             rows="5"
           />
