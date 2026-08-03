@@ -1,0 +1,34 @@
+name: Auto Deploy to Render
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Render
+        run: |
+          # Render will automatically deploy when it detects a new push to main
+          # This workflow serves as a notification trigger
+          echo "Triggering Render deployment..."
+          
+          # Optional: Send webhook to Render (if you set up a deploy hook)
+          if [ -n "${{ secrets.RENDER_DEPLOY_HOOK }}" ]; then
+            curl -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}"
+            echo "Render deploy hook triggered"
+          else
+            echo "Render will auto-deploy via GitHub integration"
+          fi
+
+      - name: Log deployment info
+        run: |
+          echo "✅ Deployment triggered for commit: ${{ github.sha }}"
+          echo "📍 Branch: ${{ github.ref }}"
+          echo "🔗 Monitor at: https://dashboard.render.com"
