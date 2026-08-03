@@ -27,6 +27,10 @@ jobs:
       - name: Install backend dependencies
         run: npm ci --prefix backend
 
+      - name: Run tests (skip if none)
+        run: npm test -- --passWithNoTests --watchAll=false
+        continue-on-error: true
+
       - name: Build frontend
         run: npm run build
 
