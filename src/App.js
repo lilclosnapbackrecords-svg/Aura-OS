@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import io from 'socket.io-client';
+import { Analytics } from '@vercel/analytics/react';
 import './App.css';
 
 // NOTE: socket is initialized inside the component to allow proper lifecycle management and cleanup
@@ -106,6 +107,7 @@ function App() {
           <div className="rack-unit">AI Compressor: Bypassed</div>
         </section>
       </main>
+      <Analytics />
     </div>
   );
 }
