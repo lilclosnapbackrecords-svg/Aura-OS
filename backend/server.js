@@ -14,6 +14,15 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+// Home endpoint
+app.get('/', (req, res) => {
+  res.json({
+    status: 'Aura OS backend online',
+    version: 'v1',
+    features: ['transport-control', 'ai-lyrics', 'bpm-sync', 'lyrics-frame']
+  });
+});
+
 // AI & DSP Routing Endpoints
 app.post('/api/ai/transcribe', (req, res) => {
     // TODO: Connect to audio-to-MIDI transcription service
@@ -58,6 +67,7 @@ const io = new Server(server, {
 io.on('connection', (socket) => {
     console.log(`Studio Console connected: ${socket.id}`);
 
+    // Transport events
     socket.on('transport_play', (data) => {
         console.log('Transport: PLAY triggered');
         io.emit('sync_status', { state: 'PLAYING', time: data.time });
@@ -66,6 +76,18 @@ io.on('connection', (socket) => {
     socket.on('transport_stop', () => {
         console.log('Transport: STOP triggered');
         io.emit('sync_status', { state: 'STOPPED', time: 0 });
+    });
+
+    // BPM sync event
+    socket.on('change-bpm', (data) => {
+        console.log(`BPM changed to: ${data.bpm}`);
+        io.emit('bpm-updated', data);
+    });
+
+    // Lyrics frame sync event
+    socket.on('sync-lyrics', (data) => {
+        console.log('Lyrics frame synced');
+        io.emit('lyrics-frame', data);
     });
 
     socket.on('disconnect', () => {
